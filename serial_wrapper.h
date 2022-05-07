@@ -5,14 +5,15 @@
 extern "C" {
 #endif 
 
+#include <ctype.h>
 #include <stdio.h>
 #include <string.h>
 
 #include <windows.h>
 
 
-BOOL OpenCOMPort(int, int);
-BOOL CloseCOMPort(int); 
+BOOL OpenCOMPort(int, int, char*, int);
+BOOL CloseCOMPort(int);
 int ReadByte(int, unsigned char);
 int ReadBuffer(int, unsigned char*, int);
 int WriteByte(int, unsigned char);

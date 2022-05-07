@@ -17,7 +17,7 @@ LPCSTR str_ports[RS232_PORTS] = {"\\\\.\\COM1",  "\\\\.\\COM2",  "\\\\.\\COM3", 
                                  "\\\\.\\COM45", "\\\\.\\COM46", "\\\\.\\COM47", "\\\\.\\COM48" };
 char settings[128];
 
-BOOL OpenCOMPort(int port_number, int baud_rate) 
+BOOL OpenCOMPort(int port_number, int baud_rate, char *data_stop, int mode) 
 {
     if (port_number < 0 || port_number >= RS232_PORTS) 
     {
@@ -46,13 +46,100 @@ BOOL OpenCOMPort(int port_number, int baud_rate)
     LPCOMMPROP properties;
     GetCommProperties(com_ports[port_number], properties);
 
-    if (!(baud_rate & properties->dwSettableBaud == baud_rate))
+    if (baud_rate & properties->dwSettableBaud != baud_rate)
     {
         printf("Invalid baud rate specified. Defaulting to 9600 bps.");
         baud_rate = 9600;
     }
 
-    strcpy(settings, "");
+    char buffer[128];
+    sprintf(buffer, "baud=%d", baud_rate);
+    strcpy(settings, buffer);
+
+    if (strlen(data_stop) != 3) 
+    {
+        printf("Invalid mode specified.");
+        return FALSE;
+    }
+
+    buffer[0] = '\0';
+    
+    // Check if data_stop[0] (data set) is between 5 and 8
+    if (! (isdigit(data_stop[0]) && ( (data_stop[0] - '0') - 5 ) * ( (data_stop[0] - '0') - 8 ) <= 0) )
+    {
+        printf("Invalid number of data bits specified.");
+        return FALSE;
+    }   
+
+    sprintf(buffer, " data=%c", data_stop[0]);
+    strcat(settings, buffer);
+    buffer[0] = '\0';
+
+    char parity_to_lower = tolower(data_stop[1]);
+    if (! (strchr(&parity_to_lower, 'n') || strchr(&parity_to_lower, 'e') || strchr(&parity_to_lower, 'o')) )
+    {
+        printf("Invalid parity specified.");
+        return FALSE;
+    }
+
+    sprintf(buffer, " data=%c", data_stop[1]);
+    strcat(settings, buffer);
+    buffer[0] = '\0';
+
+    if (data_stop[2] != '1' || data_stop[2] != '2') 
+    {
+        printf("Invalid number of stop bits specified.");
+        return FALSE;
+    }
+
+    sprintf(buffer, " stop=%c", data_stop[2]);
+    strcat(settings, buffer);
+
+    if (mode)
+    {
+        strcat(settings, " to=off xon=off odsr=off dtr=on rts=off");
+        device_block.fOutxCtsFlow = TRUE;
+        device_block.fRtsControl = RTS_CONTROL_HANDSHAKE;
+    }
+
+    else
+        strcat(settings, " to=off xon=off odsr=off dtr=on rts=on");
+
+    /*
+    BuildCommDCBA [in] lpDef <===> 'settings'
+
+    COMx[:][baud=b][parity=p][data=d][stop=s]
+    [to={on|off}][xon={on|off}][odsr={on|off}]
+    [octs={on|off}][dtr={on|off|hs}][rts={on|off|hs|tg}][idsr={on|off}]
+    */
+
+    if (!BuildCommDCBA(settings, &device_block))
+    {
+        printf("Failed to set COM port device control block setttings");
+        CloseHandle(com_ports[port_number]);
+        return FALSE;
+    }
+
+    if (!SetCommState(com_ports[port_number], &device_block)) 
+    {
+        printf("Failed to set COM port configuration settings.");
+        CloseHandle(com_ports[port_number]);
+        return FALSE;
+    }
+
+    COMMTIMEOUTS timeouts;
+    timeouts.ReadIntervalTimeout = MAXDWORD;
+    timeouts.ReadTotalTimeoutMultiplier = 0;
+    timeouts.ReadTotalTimeoutConstant = 0;
+    timeouts.WriteTotalTimeoutMultiplier = 0;
+    timeouts.WriteTotalTimeoutConstant = 0;
+
+    if (!SetCommTimeouts(com_ports[port_number], &timeouts))
+    {
+        printf("Failed to set COM port timeout settings.");
+        CloseHandle(com_ports[port_number]);
+        return FALSE;
+    }
 
     return TRUE;
 }   
