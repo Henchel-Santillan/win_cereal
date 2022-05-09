@@ -200,6 +200,21 @@ int WriteBuffer(int port_number, unsigned char *buffer, int size)
     return bytes_written;
 }
 
+
+BOOL GetPortNumber(const char *port_name) 
+{
+    char buffer[32] = "\\\\.\\";
+    strncat(buffer, port_name, 16);
+    buffer[31] = 0;
+
+    for (int i = 0; i < RS232_PORTS; ++i) 
+    {
+        if (!strcmp(com_ports[i], buffer)) return i;
+    }
+    
+    return -1;
+}
+
 void FlushRX(int port_number) 
 {
     PurgeComm(com_ports[port_number], PURGE_RXCLEAR | PURGE_RXABORT);
